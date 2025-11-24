@@ -4,7 +4,7 @@
 
 ## Abstract
 
-In distributed sensor networks, sensors often observe a dynamic process within overlapping regions. Due to random delays, these correlated observations arrive at the fusion center asynchronously. This project addresses the joint design of sampling, scheduling, and estimation policies for monitoring a correlated Wiener process.
+In distributed sensor networks, sensors often observe a dynamic process within overlapping regions. Due to random delays, these correlated observations arrive at the fusion center asynchronously. This paper addresses the joint design of sampling, scheduling, and estimation policies for monitoring a correlated Wiener process.
 
 We establish a **separation principle** and identify the joint optimal policy:
 

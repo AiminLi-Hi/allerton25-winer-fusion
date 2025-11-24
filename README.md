@@ -1,6 +1,6 @@
 # Optimal Sampling & Scheduling for Remote Fusion Estimation
 
-**Project Page for Allerton 2024 Conference Paper**
+**Project Page for Allerton 2025 Conference Paper**
 
 ## Abstract
 
@@ -29,10 +29,10 @@ Visit the [Project Website](https://www.google.com/search?q=https://%5BREPLACE_W
 If you find this work useful, please consider citing:
 
 ```
-@inproceedings{li2024optimal,
+@inproceedings{li2025optimal,
   title={Optimal Sampling and Scheduling for Remote Fusion Estimation of Correlated Wiener Processes},
   author={Li, Aimin and Uysal, Elif},
-  booktitle={2024 61th Annual Allerton Conference on Communication, Control, and Computing (Allerton)},
+  booktitle={2025 61th Annual Allerton Conference on Communication, Control, and Computing (Allerton)},
   year={2025},
   organization={IEEE}
 }

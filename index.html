@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimal Sampling & Scheduling | Allerton 2024</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        stone: {
+                            50: '#fafaf9',
+                            100: '#f5f5f4',
+                            200: '#e7e5e4',
+                            300: '#d6d3d1',
+                            400: '#a8a29e',
+                            500: '#78716c',
+                            600: '#57534e',
+                            700: '#44403c',
+                            800: '#292524',
+                            900: '#1c1917',
+                        },
+                        'nobel-gold': '#C5A059', // Custom Gold Color
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 1s ease-out forwards',
+                        'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'shake': 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both',
+                        'tap-gesture': 'tapGesture 2s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        shake: {
+                            '10%, 90%': { transform: 'translate3d(-1px, 0, 0)' },
+                            '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
+                            '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
+                            '40%, 60%': { transform: 'translate3d(4px, 0, 0)' }
+                        },
+                        tapGesture: {
+                            '0%, 100%': { transform: 'translate(0, 0) scale(1)', opacity: '1' },
+                            '50%': { transform: 'translate(-5px, -5px) scale(0.9)', opacity: '0.8' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            background-color: #F9F8F4;
+            color: #1c1917;
+            scroll-behavior: smooth;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #F9F8F4;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d6d3d1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a29e;
+        }
+        .canvas-container {
+            mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- Helper: Lucide Icon Renderer ---
+        const LucideIcon = ({ name, className = "", size = 24 }) => {
+            const [iconDef, setIconDef] = useState(null);
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
+                    setIconDef(window.lucide.icons[name]);
+                }
+            }, [name]);
+            if (!iconDef) return <span className="w-6 h-6 inline-block" />;
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {iconDef.map((child, index) => {
+                        const [tagName, attrs] = child;
+                        return React.createElement(tagName, { ...attrs, key: index });
+                    })}
+                </svg>
+            );
+        };
+
+        // --- Latex Component ---
+        const Latex = ({ children, block = false }) => {
+            const containerRef = useRef(null);
+            useEffect(() => {
+                if (window.katex && containerRef.current) {
+                    window.katex.render(children, containerRef.current, {
+                        throwOnError: false,
+                        displayMode: block
+                    });
+                }
+            }, [children, block]);
+            return <span ref={containerRef} className={block ? "block my-2" : "inline"} />;
+        };
+
+        // --- Component: Fusion Logic Explorer (Refined Layout) ---
+        const FusionLogicExplorer = () => {
+            const [age1, setAge1] = useState(5);
+            const [age2, setAge2] = useState(2);
+            
+            const isSource1Stale = age1 > age2;
+
+            return (
+                <div className="bg-white border border-stone-200 rounded-2xl p-8 shadow-sm hover:shadow-md hover:border-nobel-gold/30 transition-all duration-500">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                        
+                        {/* Controls - Narrower (5/12 cols) */}
+                        <div className="lg:col-span-5 flex flex-col justify-center">
+                            <h3 className="font-serif text-2xl font-bold text-stone-900 mb-8 flex items-center gap-3">
+                                <LucideIcon name="Sliders" size={24} className="text-nobel-gold"/>
+                                Logic Explorer
+                            </h3>
+                            
+                            <div className="space-y-10">
+                                {/* Age 1 Slider */}
+                                <div className="relative">
+                                    <div className="flex justify-between text-sm font-bold text-stone-600 mb-2">
+                                        <span className="text-sm text-stone-500 uppercase tracking-wider">Source 1 Age</span>
+                                        <span className={`font-mono transition-colors duration-300 ${isSource1Stale ? 'text-red-600' : 'text-emerald-600'}`}>
+                                            <Latex>{`\\Delta_1 = ${age1.toFixed(1)}`}</Latex>
+                                        </span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0.1" max="10" step="0.1" value={age1}
+                                        onChange={e => setAge1(parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-600 hover:accent-stone-800 transition-all"
+                                    />
+                                </div>
+
+                                {/* Visual Inequality Indicator */}
+                                <div className="flex justify-center items-center">
+                                    <div className={`px-4 py-1.5 rounded-lg text-sm font-mono font-bold border transition-all duration-300 ${
+                                        isSource1Stale 
+                                        ? 'bg-stone-800 text-white border-stone-800' 
+                                        : 'bg-stone-100 text-stone-400 border-stone-200'
+                                    }`}>
+                                        <Latex>{`\\Delta_1 ${isSource1Stale ? '>' : '\\le'} \\Delta_2`}</Latex>
+                                    </div>
+                                </div>
+
+                                {/* Age 2 Slider */}
+                                <div className="relative">
+                                    <div className="flex justify-between text-sm font-bold text-stone-600 mb-2">
+                                        <span className="text-sm text-stone-500 uppercase tracking-wider">Source 2 Age</span>
+                                        <span className={`font-mono transition-colors duration-300 ${!isSource1Stale ? 'text-red-600' : 'text-emerald-600'}`}>
+                                            <Latex>{`\\Delta_2 = ${age2.toFixed(1)}`}</Latex>
+                                        </span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0.1" max="10" step="0.1" value={age2}
+                                        onChange={e => setAge2(parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-nobel-gold hover:accent-amber-600 transition-all"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Logic Display - Wider (7/12 cols) */}
+                        <div className="lg:col-span-7 flex flex-col justify-center">
+                            <div className={`p-8 rounded-2xl border transition-all duration-500 relative ${isSource1Stale ? 'border-nobel-gold bg-amber-50/30' : 'border-stone-200 bg-stone-50'}`}>
+                                
+                                {/* Logic Explanation Tag */}
+                                <div className="absolute top-0 right-0 px-4 py-1.5 bg-white/80 rounded-bl-xl text-[10px] font-bold uppercase tracking-widest text-stone-400 border-b border-l border-stone-100">
+                                    Estimator Policy
+                                </div>
+
+                                <div className="text-center mb-8 mt-2">
+                                    <span className={`text-xs font-bold tracking-[0.15em] uppercase px-3 py-1 rounded border transition-colors duration-300 ${isSource1Stale ? 'bg-nobel-gold border-nobel-gold text-white' : 'bg-white border-stone-200 text-stone-400'}`}>
+                                        {isSource1Stale ? 'Fusion Activated' : 'Standard Estimation'}
+                                    </span>
+                                </div>
+
+                                <div className="text-center min-h-[200px] flex flex-col items-center justify-center space-y-6">
+                                    {isSource1Stale ? (
+                                        <div className="animate-fade-in-up w-full">
+                                            {/* Formula Size: Reduced to text-lg for better fit */}
+                                            <div className="text-lg md:text-xl overflow-x-auto py-2 px-2">
+                                                <Latex block>{`\\hat{W}_t^{(1)} = \\mathbf{G} \\cdot W_{sample}^{(1)} + \\mathbf{Q} \\cdot W_{sample}^{(2)}`}</Latex>
+                                            </div>
+                                            <div className="mt-6 text-sm text-stone-600 bg-white/80 p-5 rounded-xl border border-stone-200/50 shadow-sm text-left">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                                                    <p><strong className="text-stone-800">Problem:</strong> Source 1 is stale.</p>
+                                                </div>
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                    <p><strong className="text-stone-800">Solution:</strong> Source 2 is fresher.</p>
+                                                </div>
+                                                <p className="text-nobel-gold font-bold border-t border-stone-100 pt-3 text-xs uppercase tracking-wide">
+                                                    Strategy: "Borrow" freshness via Correlation
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="animate-fade-in-up w-full">
+                                            <div className="text-lg md:text-xl overflow-x-auto py-2 px-2">
+                                                <Latex block>{`\\hat{W}_t^{(1)} = W_{sample}^{(1)}`}</Latex>
+                                            </div>
+                                            <div className="mt-6 text-sm text-stone-600 bg-white/80 p-5 rounded-xl border border-stone-200/50 shadow-sm text-left">
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                    <p><strong className="text-stone-800">Status:</strong> Source 1 is fresh enough.</p>
+                                                </div>
+                                                <p className="text-stone-400 border-t border-stone-100 pt-3 text-xs uppercase tracking-wide">
+                                                    Strategy: Use own sample
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Component: Shared Channel Demo (Updated UI) ---
+        const SharedChannelDemo = () => {
+            const [status, setStatus] = useState('IDLE'); 
+            const [packet, setPacket] = useState(null); 
+            const [blockedSource, setBlockedSource] = useState(null); 
+            const [hasInteracted, setHasInteracted] = useState(false); 
+
+            useEffect(() => {
+                let animFrame;
+                if (status === 'TRANSMITTING' && packet) {
+                    const animate = () => {
+                        setPacket(prev => {
+                            if (!prev) return null;
+                            const newProgress = prev.progress + 1.0; 
+                            if (newProgress >= 100) {
+                                setStatus('IDLE');
+                                return null;
+                            }
+                            return { ...prev, progress: newProgress };
+                        });
+                        animFrame = requestAnimationFrame(animate);
+                    };
+                    animFrame = requestAnimationFrame(animate);
+                }
+                return () => cancelAnimationFrame(animFrame);
+            }, [status, packet]);
+
+            const handleSend = (source) => {
+                setHasInteracted(true); 
+                if (status === 'TRANSMITTING') {
+                    setBlockedSource(source);
+                    setTimeout(() => setBlockedSource(null), 500); 
+                    return;
+                }
+                setStatus('TRANSMITTING');
+                setPacket({ source, progress: 0 });
+            };
+
+            return (
+                <div className="relative bg-white border border-stone-200 rounded-2xl p-8 shadow-sm hover:shadow-md hover:border-nobel-gold/30 transition-all duration-300 group">
+                    
+                    <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-stone-50 rounded-lg text-[10px] font-bold text-stone-400 uppercase tracking-widest border border-stone-100">
+                        <LucideIcon name="MousePointerClick" size={12} />
+                        <span>Interactive</span>
+                    </div>
+
+                    <div className="text-center mb-8">
+                        <h3 className="font-serif text-2xl font-bold text-stone-900 mb-2">Model</h3>
+                        <p className="text-stone-500 text-sm mb-4">Sensors share a single communication channel.</p>
+                        <div className="bg-stone-50 px-6 py-4 rounded-xl border border-stone-100 mx-auto max-w-xs shadow-sm">
+                             <p className="text-stone-700 text-sm font-medium leading-relaxed">
+                                <strong className="text-stone-900 block text-xs uppercase tracking-wide mb-1">Constraint</strong>
+                                A new transmission cannot start until the previous one finishes.
+                             </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-6 h-36 relative bg-white rounded-xl p-6 border border-dashed border-stone-200">
+                        {/* Status Indicator */}
+                        <div className={`absolute -top-3 right-6 px-3 py-1 rounded-full text-[10px] font-bold border flex items-center gap-2 bg-white shadow-sm z-20 transition-colors duration-300 ${
+                            status === 'TRANSMITTING' 
+                            ? 'text-red-600 border-red-100 bg-red-50' 
+                            : 'text-emerald-600 border-emerald-100 bg-emerald-50'
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${status === 'TRANSMITTING' ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                            {status === 'TRANSMITTING' ? 'BUSY' : 'IDLE'}
+                        </div>
+
+                        {/* Sensors */}
+                        <div className="flex flex-col justify-center gap-6 z-10 relative">
+                            {[1, 2].map(id => (
+                                <button 
+                                    key={id}
+                                    onClick={() => handleSend(id)}
+                                    className={`
+                                        relative w-14 h-14 rounded-full border-2 flex flex-col items-center justify-center transition-all duration-200 shadow-sm z-10
+                                        ${blockedSource === id ? 'border-red-400 bg-red-50 animate-shake' : 'border-stone-200 bg-white hover:border-nobel-gold hover:text-nobel-gold hover:scale-105 active:scale-95'}
+                                    `}
+                                    title={`Click to send packet from Sensor ${id}`}
+                                >
+                                    <LucideIcon name="Activity" size={16} className="mb-0.5 opacity-50" />
+                                    <span className="font-serif font-bold text-stone-600 text-xs">S{id}</span>
+                                    {blockedSource === id && (
+                                        <div className="absolute inset-0 border-2 border-red-500 rounded-full animate-ping opacity-75"></div>
+                                    )}
+                                    <div className="absolute -right-3 top-1/2 w-3 h-0.5 bg-stone-200 -translate-y-1/2"></div>
+                                </button>
+                            ))}
+
+                            {/* Visual Click Hint */}
+                            {!hasInteracted && (
+                                <div className="absolute -left-10 top-2 w-8 h-8 pointer-events-none animate-tap-gesture text-nobel-gold/70">
+                                    <LucideIcon name="Hand" size={28} className="rotate-[-30deg]" />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Channel Area */}
+                        <div className="flex-1 h-20 border-y border-stone-100 bg-stone-50/30 relative overflow-hidden flex items-center rounded px-2">
+                             {/* Moving Packet */}
+                             {packet && (
+                                <div 
+                                    className="absolute w-10 h-8 bg-stone-800 rounded flex items-center justify-center shadow-lg z-20 border border-stone-700"
+                                    style={{ 
+                                        left: `${packet.progress}%`,
+                                        transform: 'translateX(-50%)'
+                                    }}
+                                >
+                                    <span className="text-[10px] font-bold text-white">PKT{packet.source}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Fusion Center */}
+                        <div className="w-24 h-28 bg-stone-900 rounded-xl flex flex-col items-center justify-center shadow-xl z-10 border border-stone-800 relative group-hover:translate-y-[-2px] transition-transform">
+                             <div className="absolute -left-3 top-1/2 w-3 h-0.5 bg-stone-300 -translate-y-1/2"></div>
+                            <LucideIcon name="Server" className="text-stone-400 mb-2" size={28} />
+                            <span className="text-[10px] text-stone-500 font-bold text-center leading-tight tracking-widest uppercase">Fusion<br/>Center</span>
+                        </div>
+                    </div>
+                    
+                    <p className="text-xs text-stone-400 mt-6 text-center font-serif italic">
+                        <span className="font-bold not-italic text-nobel-gold">Try it:</span> Click S1 or S2 to send updates. Observe blocking when channel is busy.
+                    </p>
+                </div>
+            )
+        };
+
+        // --- Component: Precise Wiener Simulation (UI Polish) ---
+        const WienerSimulation = () => {
+            const canvasRef = useRef(null);
+            const [rho, setRho] = useState(0.9);
+            
+            const stateRef = useRef({
+                t: 0,
+                w1: 0,
+                w2: 0,
+                history: [], 
+                yMin: -10,
+                yMax: 10
+            });
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationId;
+                const width = canvas.width;
+                const height = canvas.height;
+
+                const render = () => {
+                    const state = stateRef.current;
+                    state.t += 1;
+
+                    const dB1 = (Math.random() - 0.5) * 2;
+                    const dB2 = (Math.random() - 0.5) * 2;
+                    
+                    state.w1 += dB1;
+                    state.w2 += (rho * dB1 + Math.sqrt(1 - rho * rho) * dB2);
+
+                    state.history.push({ w1: state.w1, w2: state.w2 });
+                    if (state.history.length > width) state.history.shift();
+
+                    let currentMin = Infinity;
+                    let currentMax = -Infinity;
+                    state.history.forEach(pt => {
+                        currentMin = Math.min(currentMin, pt.w1, pt.w2);
+                        currentMax = Math.max(currentMax, pt.w1, pt.w2);
+                    });
+                    
+                    const targetMin = currentMin - 5;
+                    const targetMax = currentMax + 5;
+                    state.yMin += (targetMin - state.yMin) * 0.1;
+                    state.yMax += (targetMax - state.yMax) * 0.1;
+                    
+                    const range = state.yMax - state.yMin;
+
+                    ctx.clearRect(0, 0, width, height);
+
+                    ctx.strokeStyle = '#e7e5e4'; 
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    for(let i=0; i<width; i+=50) { ctx.moveTo(i,0); ctx.lineTo(i,height); }
+                    ctx.stroke();
+
+                    const yZero = height - ((0 - state.yMin) / range) * height;
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#d6d3d1';
+                    ctx.setLineDash([5, 5]);
+                    ctx.moveTo(0, yZero);
+                    ctx.lineTo(width, yZero);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    const drawPath = (key, color) => {
+                        ctx.beginPath();
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 2;
+                        state.history.forEach((pt, i) => {
+                            const x = i + (width - state.history.length); 
+                            const y = height - ((pt[key] - state.yMin) / range) * height;
+                            if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                        });
+                        ctx.stroke();
+                    };
+
+                    drawPath('w1', '#57534e'); 
+                    drawPath('w2', '#C5A059'); 
+
+                    animationId = requestAnimationFrame(render);
+                };
+                render();
+                return () => cancelAnimationFrame(animationId);
+            }, [rho]);
+
+            return (
+                <div className="w-full bg-[#F5F4F0] border border-stone-200 rounded-2xl p-6 relative overflow-hidden group hover:border-nobel-gold/50 transition-colors duration-500 hover:shadow-md">
+                    <div className="absolute top-4 left-6 z-10 bg-white/90 backdrop-blur px-4 py-3 rounded-xl border border-stone-100 shadow-sm text-xs font-mono">
+                         <div className="flex items-center gap-3 mb-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-stone-600"></span> 
+                            <span>Source 1: <Latex>{"W^{(1)}_t"}</Latex></span>
+                         </div>
+                         <div className="flex items-center gap-3">
+                            <span className="w-2.5 h-2.5 rounded-full bg-nobel-gold"></span> 
+                            <span>Source 2: <Latex>{"W^{(2)}_t"}</Latex></span>
+                         </div>
+                    </div>
+                    
+                    <div className="canvas-container mb-8 rounded-lg overflow-hidden bg-white/30 border border-stone-100/50">
+                        <canvas ref={canvasRef} width={800} height={300} className="w-full h-64 object-cover cursor-crosshair opacity-90 mix-blend-multiply" />
+                    </div>
+
+                    <div className="flex items-center gap-8 px-4">
+                        <div className="flex-1">
+                            <label className="flex justify-between text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">
+                                <span>Correlation (<Latex>{"\\rho"}</Latex>)</span>
+                                <span className="bg-white px-2 py-0.5 rounded border border-stone-200">{rho.toFixed(2)}</span>
+                            </label>
+                            <input 
+                                type="range" min="0" max="1" step="0.05" value={rho} 
+                                onChange={e => setRho(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-800 hover:accent-nobel-gold transition-all"
+                            />
+                        </div>
+                        <div className="text-xs text-stone-400 font-serif italic w-48 text-right leading-relaxed">
+                             Dynamics generated via exact SDE in Eq. (1).
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App ---
+        const App = () => {
+            const [scrolled, setScrolled] = useState(false);
+            const [menuOpen, setMenuOpen] = useState(false);
+
+            useEffect(() => {
+                const handleScroll = () => setScrolled(window.scrollY > 50);
+                window.addEventListener('scroll', handleScroll);
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
+            const scrollToSection = (id) => (e) => {
+                e.preventDefault();
+                setMenuOpen(false);
+                const element = document.getElementById(id);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth' });
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-[#F9F8F4] text-stone-800 font-sans selection:bg-nobel-gold selection:text-white">
+                    
+                    {/* Navigation */}
+                    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled ? 'bg-[#F9F8F4]/95 backdrop-blur-md shadow-sm py-4' : 'bg-transparent py-8'}`}>
+                        <div className="container mx-auto px-6 flex justify-between items-center">
+                            <div className="flex items-center gap-4 cursor-pointer group" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                                <div className="w-10 h-10 bg-stone-900 text-white rounded-sm flex items-center justify-center font-serif font-bold text-xl shadow-md group-hover:bg-nobel-gold transition-colors duration-300">Σ</div>
+                                <div className={`flex flex-col transition-opacity duration-300 ${scrolled ? 'opacity-100' : 'opacity-0 md:opacity-100'}`}>
+                                    <span className="font-serif font-bold text-lg tracking-tight leading-none text-stone-900">Optimal Design</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Allerton 2024</span>
+                                </div>
+                            </div>
+                            
+                            <div className="hidden md:flex items-center gap-10 text-xs font-bold tracking-widest text-stone-500">
+                                <a href="#challenge" onClick={scrollToSection('challenge')} className="hover:text-stone-900 transition-colors uppercase py-2">Challenge</a>
+                                <a href="#model" onClick={scrollToSection('model')} className="hover:text-stone-900 transition-colors uppercase py-2">Model</a>
+                                <a href="#estimator" onClick={scrollToSection('estimator')} className="hover:text-stone-900 transition-colors uppercase py-2">Estimator</a>
+                                <a href="#solution" onClick={scrollToSection('solution')} className="hover:text-stone-900 transition-colors uppercase py-2">Solution</a>
+                                <a href="#insight" onClick={scrollToSection('insight')} className="hover:text-stone-900 transition-colors uppercase py-2">Insight</a>
+                                <a href="#authors" onClick={scrollToSection('authors')} className="bg-stone-900 text-white px-5 py-2 rounded-full hover:bg-nobel-gold transition-colors uppercase">Authors</a>
+                            </div>
+
+                            <button className="md:hidden text-stone-900 p-2" onClick={() => setMenuOpen(!menuOpen)}>
+                                <LucideIcon name={menuOpen ? "X" : "Menu"} />
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* Mobile Menu */}
+                    {menuOpen && (
+                        <div className="fixed inset-0 z-40 bg-[#F9F8F4] flex flex-col items-center justify-center gap-8 text-xl font-serif animate-fade-in">
+                            <a href="#challenge" onClick={scrollToSection('challenge')} className="hover:text-nobel-gold transition-colors uppercase">Challenge</a>
+                            <a href="#model" onClick={scrollToSection('model')} className="hover:text-nobel-gold transition-colors uppercase">Model</a>
+                            <a href="#estimator" onClick={scrollToSection('estimator')} className="hover:text-nobel-gold transition-colors uppercase">Estimator</a>
+                            <a href="#solution" onClick={scrollToSection('solution')} className="hover:text-nobel-gold transition-colors uppercase">Solution</a>
+                        </div>
+                    )}
+
+                    {/* Hero Section */}
+                    <header className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
+                        {/* Abstract Network Background */}
+                        <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+                            <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-b from-stone-200 to-transparent rounded-full blur-[100px] translate-x-1/2 -translate-y-1/2"></div>
+                            <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-t from-nobel-gold/20 to-transparent rounded-full blur-[100px] -translate-x-1/2 translate-y-1/2"></div>
+                        </div>
+
+                        <div className="relative z-10 container mx-auto px-6 text-center max-w-5xl">
+                            <div className="inline-flex items-center gap-3 mb-8 px-4 py-2 border border-stone-200 text-stone-500 text-[10px] tracking-[0.3em] uppercase font-bold rounded-full backdrop-blur-sm bg-white/40 shadow-sm animate-fade-in">
+                                <span className="w-1.5 h-1.5 rounded-full bg-nobel-gold"></span>
+                                Allerton 2024 • Conference Paper
+                            </div>
+                            
+                            <h1 className="font-serif text-5xl md:text-8xl font-medium leading-[1.1] mb-8 text-stone-900 tracking-tight animate-fade-in-up" style={{animationDelay: '0.1s'}}>
+                                Optimal Sampling <br className="hidden md:block"/>
+                                <span className="italic text-stone-400 font-normal">& Scheduling</span>
+                            </h1>
+                            
+                            <p className="font-light italic text-stone-500 text-2xl md:text-3xl block mt-4 mb-10 max-w-3xl mx-auto animate-fade-in-up" style={{animationDelay: '0.2s'}}>
+                                for Remote Fusion Estimation of Correlated Wiener Processes
+                            </p>
+                            
+                            <p className="max-w-xl mx-auto text-lg text-stone-600 font-light leading-relaxed mb-12 animate-fade-in-up" style={{animationDelay: '0.3s'}}>
+                                Solving the puzzle of fusing asynchronous, correlated information in distributed sensor networks under random delay constraints.
+                            </p>
+                            
+                            <div className="flex justify-center animate-fade-in-up" style={{animationDelay: '0.4s'}}>
+                                <a href="#challenge" onClick={scrollToSection('challenge')} className="group flex flex-col items-center gap-3 text-xs font-bold tracking-widest text-stone-400 hover:text-stone-900 transition-colors cursor-pointer uppercase">
+                                    <span>Discover</span>
+                                    <span className="p-3 border border-stone-200 rounded-full group-hover:border-stone-900 transition-colors bg-white/50 group-hover:bg-white shadow-sm">
+                                        <LucideIcon name="ArrowDown" size={18} />
+                                    </span>
+                                </a>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main>
+                        {/* Section 1: The Challenge (Motivation) */}
+                        <section id="challenge" className="py-32 bg-white relative">
+                            <div className="container mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-12 gap-16 items-start">
+                                {/* Left Sticky */}
+                                <div className="md:col-span-5 md:sticky md:top-32 z-10">
+                                    <div className="inline-block mb-4 text-xs font-bold tracking-widest text-stone-400 uppercase">The Challenge</div>
+                                    <h2 className="font-serif text-4xl md:text-5xl mb-8 leading-tight text-stone-900">
+                                        Correlated Chaos in <span className="italic text-stone-400 block mt-2">Distributed Networks</span>
+                                    </h2>
+                                    <div className="w-24 h-1 bg-nobel-gold mb-8"></div>
+                                    <blockquote className="text-xl text-stone-600 font-serif italic border-l-4 border-stone-200 pl-6 py-2 leading-relaxed hidden md:block">
+                                        "How can one fuse asynchronous yet correlated information for accurate remote fusion estimation?"
+                                    </blockquote>
+                                </div>
+
+                                {/* Right Content */}
+                                <div className="md:col-span-7 text-lg text-stone-600 leading-relaxed space-y-8 font-light">
+                                    <p className="text-xl leading-relaxed text-stone-800">
+                                        In distributed sensor networks, sensors often observe a dynamic process within overlapping regions. These observations are highly <strong>correlated</strong>. However, network congestion and random delays cause packets to arrive at the fusion center asynchronously.
+                                    </p>
+                                    
+                                    <div className="bg-[#F9F8F4] p-8 rounded-2xl border border-stone-100 my-8 shadow-sm">
+                                        <h4 className="font-serif text-xl mb-4 text-stone-900">The Core Conflict</h4>
+                                        <ul className="space-y-4 text-stone-600 text-base">
+                                            <li className="flex items-start gap-3">
+                                                <LucideIcon name="Unplug" className="text-red-400 mt-1" size={18} />
+                                                <span><strong>Random Delays:</strong> Information gets stale while traveling through the network, creating an "Information Gap".</span>
+                                            </li>
+                                            <li className="flex items-start gap-3">
+                                                <LucideIcon name="Network" className="text-nobel-gold mt-1" size={18} />
+                                                <span><strong>Correlation:</strong> Updates from one source effectively tell you something about the other source, complicating the "value" of information. Old data from Source A might still be useful for estimating Source B.</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <p>
+                                        Simply minimizing the Age of Information (AoI) isn't obviously optimal when correlation exists. We need a joint policy for <strong>Sampling</strong>, <strong>Scheduling</strong>, and <strong>Estimation</strong>.
+                                    </p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section 2: The Model (Interactive) */}
+                        <section id="model" className="py-32 bg-[#F9F8F4] border-t border-stone-100">
+                            <div className="container mx-auto px-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+                                    <div>
+                                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-white text-stone-500 text-[10px] font-bold tracking-widest uppercase rounded-full mb-6 border border-stone-200 shadow-sm">
+                                            <LucideIcon name="Activity" size={12}/> The Model
+                                        </div>
+                                        <h2 className="font-serif text-4xl md:text-5xl mb-6 text-stone-900 leading-tight">Coupled Wiener Processes</h2>
+                                        <p className="text-lg text-stone-600 mb-6 leading-relaxed">
+                                            We model the source as a bivariate Wiener process where updates from two sensors are correlated with coefficient <span className="font-serif italic font-bold">ρ</span>.
+                                        </p>
+                                        <div className="bg-white p-8 rounded-2xl border border-stone-200 shadow-sm mb-8">
+                                            <div className="overflow-x-auto overflow-y-hidden">
+                                                <Latex block>{`
+                                                    \\begin{aligned}
+                                                    dW_t^{(1)} &= dB_t^{(1)} \\\\
+                                                    dW_t^{(2)} &= \\rho dB_t^{(1)} + \\sqrt{1-\\rho^2} dB_t^{(2)}
+                                                    \\end{aligned}
+                                                `}</Latex>
+                                            </div>
+                                            <p className="text-sm text-stone-400 mt-4">
+                                                When <Latex>{"\\rho"}</Latex> is high, receiving a packet from Sensor 1 also reduces the uncertainty about Sensor 2. This structure allows us to exploit "stale" packets for estimation.
+                                            </p>
+                                        </div>
+
+                                        {/* Added Shared Channel Demo Here */}
+                                        <SharedChannelDemo />
+
+                                    </div>
+                                    
+                                    {/* Interactive Simulation Component */}
+                                    <div className="relative">
+                                        <div className="absolute -inset-4 bg-gradient-to-r from-stone-200 to-stone-100 rounded-2xl blur-xl opacity-50"></div>
+                                        <div className="relative z-10">
+                                            <WienerSimulation />
+                                        </div>
+                                        <p className="text-center text-xs font-bold tracking-widest text-stone-400 mt-6 uppercase">
+                                            Interactive Figure: Real-time generation of Eq. (1)
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section 2.5: Estimator Logic (NEW) */}
+                        <section id="estimator" className="py-32 bg-white border-t border-stone-100 relative">
+                            <div className="container mx-auto px-6">
+                                <div className="mb-16 max-w-3xl">
+                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 text-stone-500 text-[10px] font-bold tracking-widest uppercase rounded-full mb-6 border border-stone-200">
+                                        <LucideIcon name="BrainCircuit" size={12}/> Optimal Estimation
+                                    </div>
+                                    <h2 className="font-serif text-4xl md:text-5xl mb-6 text-stone-900 leading-tight">
+                                        Optimal Information Fusion
+                                    </h2>
+                                    <p className="text-lg text-stone-600 leading-relaxed">
+                                        How should the receiver fuse information when updates arrive asynchronously? Our optimal estimator dynamically switches strategies based on the <strong>Age of Information (AoI)</strong>.
+                                    </p>
+                                    <p className="text-stone-500 mt-4 font-light">
+                                        Even if a sensor's own data is stale, we can use fresher data from its correlated neighbor to refine the estimate. This is the power of correlation.
+                                    </p>
+                                </div>
+
+                                <FusionLogicExplorer />
+                            </div>
+                        </section>
+
+                        {/* Section 3: The Solution (Cards) */}
+                        <section id="solution" className="py-24 bg-stone-900 text-stone-100 relative overflow-hidden">
+                             {/* Ambient Background */}
+                            <div className="absolute inset-0 z-0 pointer-events-none">
+                                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-stone-800 rounded-full blur-[120px] opacity-30 mix-blend-screen"></div>
+                                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-nobel-gold rounded-full blur-[120px] opacity-10 mix-blend-screen"></div>
+                            </div>
+
+                            <div className="container mx-auto px-6 relative z-10">
+                                <div className="text-center max-w-3xl mx-auto mb-16">
+                                    <div className="inline-block mb-2 text-xs font-bold tracking-widest text-nobel-gold uppercase">Our Contribution</div>
+                                    <h2 className="font-serif text-3xl md:text-5xl mb-4 text-white">The Separation Principle</h2>
+                                    <p className="text-sm md:text-base text-stone-400 font-light max-w-xl mx-auto">
+                                        We prove that the joint optimization problem can be decoupled into three independent policies without loss of optimality.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+                                    {/* Solution Cards - Styled consistently */}
+                                    {[
+                                        { number: "01", title: "Optimal Estimator", icon: "Database", desc: "A weighted sum fusion estimator. It uniquely uses the Age of Information (AoI) to condition the fusion weights, dynamically blending fresh data with correlation history." },
+                                        { number: "02", title: "MAF Scheduler", icon: "Radio", desc: "Maximum Age First. We prove that prioritizing the source with the highest Age of Information is the optimal scheduling policy, even with non-linear correlation penalties." },
+                                        { number: "03", title: "WF Sampler", icon: "Clock", desc: "Water-Filling Sampling. A threshold-based policy that triggers new samples only when the uncertainty (Age gap) exceeds a calculated bound." }
+                                    ].map((card, idx) => (
+                                        <div key={idx} className="group relative bg-stone-800/40 hover:bg-stone-800 border border-stone-700/40 hover:border-nobel-gold/30 p-8 rounded-2xl transition-all duration-300 flex flex-col h-full backdrop-blur-sm">
+                                            <div className="flex items-center justify-between mb-6">
+                                                <div className="p-3 rounded bg-stone-900/80 text-nobel-gold border border-stone-700/50 group-hover:border-nobel-gold/50 transition-colors shadow-sm">
+                                                    <LucideIcon name={card.icon} size={20} />
+                                                </div>
+                                                <span className="text-3xl font-serif font-bold text-stone-700 group-hover:text-stone-600 transition-colors select-none opacity-60">{card.number}</span>
+                                            </div>
+                                            <h3 className="text-xl font-bold text-stone-200 font-serif mb-3 tracking-wide group-hover:text-white transition-colors">{card.title}</h3>
+                                            <p className="text-stone-400 text-sm leading-relaxed font-light opacity-80 group-hover:opacity-100 transition-opacity">
+                                                {card.desc}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section 4: Insight */}
+                        <section id="insight" className="py-32 bg-white">
+                            <div className="container mx-auto px-6">
+                                <div className="max-w-4xl mx-auto text-center mb-16">
+                                    <h2 className="font-serif text-4xl md:text-5xl mb-8 text-stone-900">"Age is All You Need"</h2>
+                                    <p className="text-xl text-stone-600 leading-relaxed mb-12 font-light">
+                                        A key theoretical insight from our work is the asymptotic equivalence between optimizing Age of Information (AoI) and Mean Squared Error (MSE).
+                                    </p>
+                                    
+                                    <div className="relative p-12 bg-[#F9F8F4] rounded-2xl border border-stone-200 shadow-sm transition-transform hover:scale-[1.01] duration-500">
+                                        <div className="absolute top-0 left-0 transform -translate-x-1/2 -translate-y-1/2 text-8xl font-serif text-stone-200">“</div>
+                                        <p className="font-serif text-2xl md:text-3xl text-stone-800 italic leading-snug">
+                                            Optimizing AoI is equivalent to optimizing MSE under pull-based communications, despite the presence of strong inter-sensor correlations.
+                                        </p>
+                                        <div className="absolute bottom-0 right-0 transform translate-x-1/2 translate-y-1/2 text-8xl font-serif text-stone-200 rotate-180">“</div>
+                                    </div>
+                                    
+                                    <p className="mt-12 text-stone-500 text-sm tracking-wide uppercase font-bold flex items-center justify-center gap-2">
+                                        <LucideIcon name="CheckCircle2" size={16} className="text-nobel-gold" />
+                                        Result: Simplified System Design without performance loss
+                                    </p>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Section 5: Authors */}
+                        <section id="authors" className="py-32 bg-[#F5F4F0] border-t border-stone-200">
+                           <div className="container mx-auto px-6">
+                                <div className="text-center mb-16">
+                                    <div className="inline-block mb-3 text-[10px] font-bold tracking-widest text-stone-400 uppercase">RESEARCH TEAM</div>
+                                    <h2 className="font-serif text-3xl md:text-5xl mb-6 text-stone-900">The Authors</h2>
+                                    <p className="text-stone-500 max-w-2xl mx-auto">Communication Networks Research Group (CNG), Middle East Technical University (METU)</p>
+                                </div>
+                                
+                                <div className="flex flex-col md:flex-row gap-8 justify-center items-center flex-wrap">
+                                    {[
+                                        { name: "Aimin Li", role: "Researcher, METU", delay: "0s" },
+                                        { name: "Elif Uysal", role: "Fellow, IEEE", delay: "0.1s" }
+                                    ].map((author, idx) => (
+                                        <div key={idx} className={`flex flex-col group animate-fade-in-up items-center p-8 bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-lg hover:border-nobel-gold/30 transition-all duration-500 w-full max-w-xs hover:-translate-y-1`} style={{ animationDelay: author.delay }}>
+                                            <h3 className="font-serif text-2xl text-stone-900 text-center mb-3 group-hover:text-nobel-gold transition-colors">{author.name}</h3>
+                                            <div className="w-8 h-0.5 bg-stone-200 mb-4 group-hover:w-16 group-hover:bg-nobel-gold transition-all duration-500"></div>
+                                            <p className="text-xs text-stone-500 font-bold uppercase tracking-widest text-center leading-relaxed">{author.role}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="text-center mt-20">
+                                     <p className="text-stone-400 italic text-sm max-w-2xl mx-auto border-t border-stone-300 pt-8">
+                                        "This work is supported by the European Union through ERC Advanced Grant 101122990-GO SPACE-ERC-2023-A."
+                                    </p>
+                                </div>
+                           </div>
+                        </section>
+                    </main>
+
+                    <footer className="bg-stone-900 text-stone-400 py-16 border-t border-stone-800">
+                        <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
+                            <div className="text-center md:text-left">
+                                <div className="text-white font-serif font-bold text-2xl mb-2">Optimal Design</div>
+                                <p className="text-xs tracking-wider uppercase text-stone-500">Li & Uysal (2025) • Allerton 2024</p>
+                            </div>
+                            <div className="flex gap-8 text-xs font-bold tracking-widest text-stone-500">
+                                <a href="#" className="hover:text-white transition-colors">PAPER</a>
+                                <a href="#" className="hover:text-white transition-colors">CODE</a>
+                                <a href="#" className="hover:text-white transition-colors">CONTACT</a>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

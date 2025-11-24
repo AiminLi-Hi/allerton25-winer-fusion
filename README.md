@@ -1,5 +1,5 @@
 # [Optimal Sampling & Scheduling for Remote Fusion Estimation](https://www.ideals.illinois.edu/items/137299)
-**Project Page for Allerton 2025 Conference Paper**
+**Project for Allerton 2025 Conference Paper, [here](https://www.ideals.illinois.edu/items/137299)**
 
 ## Abstract
 

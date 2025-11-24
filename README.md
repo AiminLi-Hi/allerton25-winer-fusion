@@ -1,5 +1,4 @@
-# Optimal Sampling & Scheduling for Remote Fusion Estimation
-
+# [Optimal Sampling & Scheduling for Remote Fusion Estimation](https://www.ideals.illinois.edu/items/137299)
 **Project Page for Allerton 2025 Conference Paper**
 
 ## Abstract
@@ -17,7 +16,7 @@ We establish a **separation principle** and identify the joint optimal policy:
 
 ## Interactive Demo
 
-Visit the [Project Website](https://www.google.com/search?q=https://%5BREPLACE_WITH_YOUR_USERNAME%5D.github.io/%5BREPLACE_WITH_REPO_NAME%5D/ "null") to interact with the:
+Visit the [Project Website](https://aiminli-hi.github.io/allerton25-winer-fusion/) to interact with the:
 
 - **Real-time Wiener Process Simulator**: Visualize correlation dynamics ($\rho$).
     

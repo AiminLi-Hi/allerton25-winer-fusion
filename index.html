@@ -159,9 +159,6 @@
 }`;
 
             const handleCopy = () => {
-                // Using deprecated execCommand for compatibility with simpler iframe envs, 
-                // but navigator.clipboard is preferred in modern browsers.
-                // Fallback approach:
                 const el = document.createElement('textarea');
                 el.value = bibtex;
                 document.body.appendChild(el);
@@ -676,13 +673,22 @@
                                     <LucideIcon name="ArrowDown" size={18} className="group-hover:translate-y-1 transition-transform" />
                                 </a>
                                 <a 
-                                    href="https://www.ideals.illinois.edu/items/130978" 
+                                    href="https://www.ideals.illinois.edu/items/137299" 
                                     target="_blank" 
                                     rel="noopener noreferrer"
                                     className="group flex items-center gap-2 px-6 py-3 bg-white border border-stone-200 text-stone-700 rounded-lg font-semibold hover:border-nobel-gold hover:text-nobel-gold transition-all shadow-sm hover:shadow-md"
                                 >
                                     <LucideIcon name="FileText" size={18} />
                                     PDF
+                                </a>
+                                <a 
+                                    href="https://cng-eee.metu.edu.tr/wp-content/Allerton%202025%20Presentation%20Correlated%20Wiener.pdf?_t=1758547941#page=25.00" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="group flex items-center gap-2 px-6 py-3 bg-white border border-stone-200 text-stone-700 rounded-lg font-semibold hover:border-nobel-gold hover:text-nobel-gold transition-all shadow-sm hover:shadow-md"
+                                >
+                                    <LucideIcon name="Presentation" size={18} />
+                                    Slides
                                 </a>
                                 <button 
                                     onClick={() => setCitationOpen(true)}
@@ -907,9 +913,9 @@
                                 <p className="text-xs tracking-wider uppercase text-stone-500">Li & Uysal (2025) • Allerton 2025</p>
                             </div>
                             <div className="flex gap-8 text-xs font-bold tracking-widest text-stone-500">
-                                <a href="#" className="hover:text-white transition-colors">PAPER</a>
+                                <a href="https://www.ideals.illinois.edu/items/137299" className="hover:text-white transition-colors">PAPER</a>
                                 <a href="#" className="hover:text-white transition-colors">CODE</a>
-                                <a href="#" className="hover:text-white transition-colors">CONTACT</a>
+                                <a href="mailto:hitliaimin@163.com" className="hover:text-white transition-colors">CONTACT</a>
                             </div>
                         </div>
                     </footer>
